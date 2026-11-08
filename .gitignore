@@ -1,0 +1,28 @@
+# Debug logs (written when DEBUG_LOG is on; one per PC)
+tool_debug*.log
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Temp copies made while swapping in a new version
+*.tmp
+
+# Working notes and Claude context (office paths, not for the public repo)
+CLAUDE.md
+notes/
+
+# Vectorworks' own icons, kept only as a drawing reference (their copyright)
+**/Icons/vectorworks-reference/
+
+# Release zips (build_zips.py)
+dist/
+
+# Vectorworks file locks and working drawings (the lock file holds the user name)
+*.lck
+*.vwx
+!/parallel-tools examples v27.vwx
+
+# Vectorworks' own folders and retired plug-ins kept in the dev folder
+Libraries/
+Plug-ins/Hedge Tool.vso

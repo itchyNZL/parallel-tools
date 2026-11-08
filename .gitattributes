@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.vso binary
+*.vst binary
+*.vwx binary
+*.png binary
+*.ico binary
+*.xlsx binary

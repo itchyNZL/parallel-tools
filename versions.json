@@ -1,26 +1,26 @@
 {
   "Comment Tool": {
-    "version": "0.22.7",
-    "date": "2026-11-08"
+    "version": "0.23.1",
+    "date": "2026-11-09"
   },
   "Revision Tool": {
-    "version": "0.7.6",
-    "date": "2026-11-08"
+    "version": "0.8.1",
+    "date": "2026-11-09"
   },
   "Break Line Tool": {
-    "version": "0.4.9",
-    "date": "2026-11-08"
+    "version": "0.5.1",
+    "date": "2026-11-09"
   },
   "Planting Tool": {
-    "version": "0.10.7",
-    "date": "2026-11-08"
+    "version": "0.11.2",
+    "date": "2026-11-09"
   },
   "HTB Tool": {
-    "version": "0.4.8",
-    "date": "2026-11-08"
+    "version": "0.5.1",
+    "date": "2026-11-09"
   },
   "Truss Tool": {
-    "version": "0.14.5",
-    "date": "2026-11-08"
+    "version": "0.15.1",
+    "date": "2026-11-09"
   }
 }
