@@ -1,0 +1,26 @@
+{
+  "Comment Tool": {
+    "version": "0.22.7",
+    "date": "2026-11-08"
+  },
+  "Revision Tool": {
+    "version": "0.7.6",
+    "date": "2026-11-08"
+  },
+  "Break Line Tool": {
+    "version": "0.4.9",
+    "date": "2026-11-08"
+  },
+  "Planting Tool": {
+    "version": "0.10.7",
+    "date": "2026-11-08"
+  },
+  "HTB Tool": {
+    "version": "0.4.8",
+    "date": "2026-11-08"
+  },
+  "Truss Tool": {
+    "version": "0.14.5",
+    "date": "2026-11-08"
+  }
+}
