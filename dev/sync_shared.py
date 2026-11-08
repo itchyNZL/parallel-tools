@@ -1,17 +1,17 @@
 """Copy the shared code blocks into every tool.
 
 Each tool's .py stays one file, so a tool can be handed out on its own. Code
-used by more than one tool is kept once in shared/<name>.py and copied into
+used by more than one tool is kept once in dev/shared/<name>.py and copied into
 each tool between these lines:
 
     # shared begin <name>
     ...
     # shared end <name>
 
-Edit shared/<name>.py, never the copy in a tool, then run:
+Edit dev/shared/<name>.py, never the copy in a tool, then run:
 
-    python sync_shared.py           write the blocks into every tool
-    python sync_shared.py --check   only report tools whose copy differs (exit 1)
+    python dev/sync_shared.py           write the blocks into every tool
+    python dev/sync_shared.py --check   only report tools whose copy differs (exit 1)
 
 build_zips.py runs the check, so a release can't go out with an old copy.
 """
@@ -19,8 +19,8 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
-SHARED = ROOT / 'shared'
+ROOT = Path(__file__).resolve().parent.parent     # the repo (this file is in dev/)
+SHARED = ROOT / 'dev' / 'shared'
 PLUGINS = ROOT / 'Plug-ins' / 'Parallel Tools'
 BLOCK = re.compile(r'^# shared begin (\S+)\n(.*?)^# shared end \1\n', re.S | re.M)
 
@@ -50,7 +50,7 @@ def sync(check=False):
             name = m.group(1)
             found.append(name)
             if name not in blocks:
-                problems.append('%s: no shared/%s.py' % (path.relative_to(ROOT), name))
+                problems.append('%s: no dev/shared/%s.py' % (path.relative_to(ROOT), name))
                 return m.group(0)
             return '# shared begin %s\n%s# shared end %s\n' % (name, blocks[name], name)
 
@@ -79,6 +79,6 @@ if __name__ == '__main__':
     stale, problems = sync(check)
     if problems or (check and stale):
         if check and stale:
-            print('Out of date: run python sync_shared.py')
+            print('Out of date: run python dev/sync_shared.py')
         sys.exit(1)
     print('Checked.' if check else 'Done.')

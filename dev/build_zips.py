@@ -9,7 +9,7 @@ Zips of different tools merge into the same folder. Versions come from each
 tool's VERSION and from versions.json, which this script also rewrites. It
 stops if a tool's copy of the shared code differs from shared/.
 
-Run with any Python 3: python build_zips.py
+Run with any Python 3, from the repo: python dev/build_zips.py
 """
 import datetime
 import json
@@ -17,7 +17,7 @@ import os
 import re
 import zipfile
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))   # the repo (this file is in dev/)
 PLUGINS = os.path.join(ROOT, 'Plug-ins', 'Parallel Tools')
 DIST = os.path.join(ROOT, 'dist')
 TOP = 'Parallel Tools'
@@ -71,7 +71,7 @@ def main():
     import sync_shared
     stale, problems = sync_shared.sync(check=True)
     if stale or problems:
-        raise SystemExit('Shared code out of date: run python sync_shared.py, test, then build.')
+        raise SystemExit('Shared code out of date: run python dev/sync_shared.py, test, then build.')
     os.makedirs(DIST, exist_ok=True)
     versions, everything = {}, []
     for folder, (py, vso, vst) in TOOLS.items():

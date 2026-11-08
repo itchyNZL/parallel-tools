@@ -14,7 +14,7 @@ Object Info's headings, order and labels come from `LAYOUT` and `LABELS` in each
 
 ## Shared code
 
-Code used by more than one tool is kept once in `shared/` and copied into each tool's `.py` between marker lines, so every tool stays one file and can be handed out on its own:
+Code used by more than one tool is kept once in `dev/shared/` and copied into each tool's `.py` between marker lines, so every tool stays one file and can be handed out on its own:
 
 ```python
 # shared begin common
@@ -24,16 +24,16 @@ Code used by more than one tool is kept once in `shared/` and copied into each t
 
 | Block | What's in it |
 |---|---|
-| `shared/common.py` | The debug log (`_log`, `_reset_failed`), units (`_mm`), classes (`_new_class`, `_set_class`, `_set_class_colour`), the About buttons (website, Check for updates). Uses each tool's `DEBUG_LOG`, `TOOL_FOLDER`, `VERSION` and `WEBSITE`. |
-| `shared/drawing-tool.py` | The drawing tool (`.vst`): modes, the Style list, pull-downs, the spanner, placing. Each tool sets it up with `TOOL_OBJECT`, `TOOL_NAME`, `TOOL_MODES`, `TOOL_PULLDOWNS`, `TOOL_DEFAULTS` and `tool_complete()`, listed at the top of the block. |
+| `dev/shared/common.py` | The debug log (`_log`, `_reset_failed`), units (`_mm`), classes (`_new_class`, `_set_class`, `_set_class_colour`), the About buttons (website, Check for updates). Uses each tool's `DEBUG_LOG`, `TOOL_FOLDER`, `VERSION` and `WEBSITE`. |
+| `dev/shared/drawing-tool.py` | The drawing tool (`.vst`): modes, the Style list, pull-downs, the spanner, placing. Each tool sets it up with `TOOL_OBJECT`, `TOOL_NAME`, `TOOL_MODES`, `TOOL_PULLDOWNS`, `TOOL_DEFAULTS` and `tool_complete()`, listed at the top of the block. |
 
-Edit the file in `shared/`, never the copy in a tool, then run:
+Edit the file in `dev/shared/`, never the copy in a tool, then run:
 
 ```bash
-python sync_shared.py
+python dev/sync_shared.py
 ```
 
-`python sync_shared.py --check` only reports tools whose copy differs, and `build_zips.py` runs it, so a release can't go out with an old copy. A tool can leave a block out (add both marker lines to take one in).
+`python dev/sync_shared.py --check` only reports tools whose copy differs, and `dev/build_zips.py` runs it, so a release can't go out with an old copy. A tool can leave a block out (add both marker lines to take one in).
 
 ## Making a drawing tool (.vst)
 
@@ -64,7 +64,7 @@ The spanner opens Default Settings, set by `TOOL_DEFAULTS` (Break Line, Planting
 ## Releases
 
 1. Bump `VERSION` and `VERSION_DATE` in the tool's `.py`, and add an entry to the tool's `CHANGELOG.md` for each release.
-2. Run `python build_zips.py` (it stops if the shared code needs a sync): one zip per tool and one with all of them in `dist/`, and `versions.json` rewritten from each tool's version. Each zip holds only what's needed to run the tools: a `Parallel Tools` folder with the `.vso`, the `.vst` and each tool's `.py` in its code folder, plus the README and LICENSE. Everything else (tool READMEs, changelogs, stubs, icons) is in this repo.
+2. Run `python dev/build_zips.py` (it stops if the shared code needs a sync): one zip per tool and one with all of them in `dist/`, and `versions.json` rewritten from each tool's version. Each zip holds only what's needed to run the tools: a `Parallel Tools` folder with the `.vso`, the `.vst` and each tool's `.py` in its code folder, plus the README and LICENSE. Everything else (tool READMEs, changelogs, stubs, icons) is in this repo.
 3. Attach the zips to a GitHub release and push `versions.json`: each tool's About > Check for updates... reads it.
 
 ## Developer switch
