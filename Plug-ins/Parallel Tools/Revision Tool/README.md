@@ -30,7 +30,7 @@ Use the **Revision** tool. Its tool bar has:
 The **Revision dialog** then asks for:
 
 - **Revision:** the first is A. After that a new revision starts on the last one you used. Typing a revision fills in the date it already has on this sheet.
-- **Date** (dd/mm/yy): today, or the date this revision already has on this sheet.
+- **Date:** a day, a month picked by name and a year, so it can't be misread whatever date order you are used to. It starts as today, or the date this revision already has on this sheet.
 - **Note:** what changed.
 - **Show marker, date and note:** off draws just the cloud (for example several clouds for one change with one tag). It still has its revision and date.
 - **Offset (sheet mm):** snap the outline to an object and the cloud is drawn this far outside it, on the printed sheet. The outline stays where you drew it.
@@ -43,7 +43,8 @@ The **Revision dialog** then asks for:
 
 | Setting | What it does |
 |---|---|
-| Revision, Date, Note | As in the Revision dialog. |
+| Revision, Note | As in the Revision dialog. A note of more than one line is not shown here: use Edit Revision. |
+| Day, Month, Year | The date. Month is a pick list. A day past the end of the month becomes its last day. |
 | Show Marker and Text | Off: the cloud only. |
 | Fixed Leader Start | Ticked when you drag the leader start along the cloud; untick to go back to the nearest point. |
 | Offset (sheet mm) | How far the cloud sits outside the outline you drew. |
@@ -69,6 +70,8 @@ Settings a revision rarely changes. A setting the revision's style controls is g
 | Text | Show | Date and Note. |
 | Text | Wrap (mm) | Wraps the note at this width. 0 is no wrap. Or drag the wrap control point. |
 | Text | Line | Under the date: none, as long as the date, or to the end of the text. |
+| Text | Date format | How the date reads on the sheet: dd/mm/yy (17/02/26), d Mon yy (17 Feb 26), yyyy-mm-dd (2026-02-17) or mm/dd/yy (02/17/26). Saved with the revision and its style, so it belongs to the drawing: a user's computer settings never change it. |
+| Text | Font, Text size (pt) | The font (by name) and size of the text. Blank and 0 leave Text > Format Text. |
 | Text | Note align | Auto (the marker's side), Left or Right. |
 | Class | Template | `{Rev}` is replaced: `Revision-{Rev}` gives `Revision-A`. A live preview shows the result. |
 | Class | Show latest | How many of a sheet's latest revisions are in colour (default 2; 0 shows them all in colour). One setting per sheet: change it on any revision and the rest of the sheet follows. |
@@ -79,7 +82,7 @@ Settings a revision rarely changes. A setting the revision's style controls is g
 - **Wrap:** at the far end of the date and note. Drag it sideways to wrap the note at that width (5 mm at least).
 - **Leader start:** where the leader leaves the cloud. Drag it along the cloud to fix it there; it stays on the cloud when the cloud is reshaped.
 
-**Font and size:** select revisions and use Text > Format Text, as for any text. The revision letter is bold.
+**Font and size:** set them in Settings (or the style, or the tool's default settings) to give every revision the same text. Left blank and 0, select revisions and use Text > Format Text, as for any text. A font or size set in Settings wins over Format Text. The revision letter is bold.
 
 ## Older revisions
 
@@ -97,7 +100,7 @@ Revisions are ordered by date on each sheet, so `#` and a Rev 1 after Rev C fall
 
 ## Styles
 
-Revisions support plug-in styles. A style holds the look: Outline, Cloud size, Billow height, Marker shape and size, Show leader, Shoulder, Setback, Show date and note, Wrap, Line, Note align, Class template and Show latest. Revision, Date, Note, Offset and the marker position stay with each revision. Colour stays with the class, so one style works for every revision.
+Revisions support plug-in styles. A style holds the look: Outline, Cloud size, Billow height, Marker shape and size, Show leader, Shoulder, Setback, Show date and note, Wrap, Line, Note align, Date format, Font and Text size, Class template and Show latest. Revision, Date, Note, Offset and the marker position stay with each revision. Colour stays with the class, so one style works for every revision.
 
 ## Revision list worksheet
 
@@ -110,7 +113,7 @@ Database row criteria: `=DATABASE((PON='Revision Tool'))`.
 | C | Date | `='Revision Tool'.'Date'` |
 | D | Note | `='Revision Tool'.'Note'` |
 
-Sort by Sheet, then Rev. Dates are stored ISO (2026-02-17) so they sort, and show as 17/02/26 on the sheet. Line breaks in Note show as `\n`.
+Sort by Sheet, then Rev. Dates are stored ISO (2026-02-17) so they sort, and show on the sheet in the revision's Date format (17/02/26 unless changed). A date typed into the Date column is read day first, or as ISO. Line breaks in Note show as `\n`.
 
 ## Limits
 

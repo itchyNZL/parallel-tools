@@ -27,8 +27,8 @@ import zlib
 
 import vs
 
-VERSION = '0.11.2'
-VERSION_DATE = '2026-11-09'
+VERSION = '0.11.3'
+VERSION_DATE = '2026-11-17'
 WEBSITE = 'github.com/itchyNZL/parallel-tools'
 TOOL_FOLDER = 'Planting Tool'
 
@@ -114,7 +114,8 @@ class Params:
     def __init__(self, h, rec):
         self.h = h
         self.rec = rec
-        self.width = max(0.0, self._num('Width', 600.0))
+        self.mm = _mm()                 # file units per mm (1 in a mm file)
+        self.width = max(0.0, self._num('Width', 600.0 * self.mm))
         self.base_width = self.width    # as typed (one row of plants overrides width)
         self.offset = match_choice(self._str('Offset'), OFFSETS, 'Centre')
         self.edge = match_choice(self._str('EdgeStyle'), EDGES, 'Billow')
@@ -133,7 +134,7 @@ class Params:
         except Exception:
             scale = 1.0
         self.scale = scale if scale and scale > 0 else 1.0
-        self.paper = _mm() * self.scale
+        self.paper = self.mm * self.scale
         self.centre_size = max(0.1, self._num('CentreSize', 1.5)) * self.paper
         self.marker_class = self._str('MarkerClass').strip()
         self.start = self._num('PlantStart', -1.0)
@@ -771,7 +772,7 @@ def single_row_width(p, closed):
     line."""
     if p.plants and p.rows == 1 and not closed:
         sp = p.spacing if p.spacing > 0 else p.base_width
-        p.width = max(1.0, p.plant_size if p.plant_size > 0 else sp * PLANT_SIZE_SHARE) + 2.0 * p.zigzag
+        p.width = max(p.mm, p.plant_size if p.plant_size > 0 else sp * PLANT_SIZE_SHARE) + 2.0 * p.zigzag
 
 
 def inside(q, ring):
@@ -1759,13 +1760,14 @@ def handle_drags(p, pts, closed):
     plant's circle) or, on a closed shape, Row Spacing and Row Shift (5, a
     plant in the next row). Reshaping moves no handle, so changes nothing
     here. A value that comes from the style is never set (its handle is
-    hidden)."""
+    hidden). The smallest a drag can set is 1 mm (p.mm: until 0.11.3 it was
+    1 file unit, so in a metres file no drag could go under a metre)."""
     last = _state_points(p)
     line = dedupe(pts, False)
     lk = p.locked
     if _moved(p, last, 2) and not closed and len(line) >= 2 and 'Width' not in lk:
         d = dist_to_line(_cp(p, 2), line)
-        w = max(2.0 * d if p.offset == 'Centre' else d, 1.0)
+        w = max(2.0 * d if p.offset == 'Centre' else d, p.mm)
         p.width = p.base_width = w
         p.set_num('Width', w)
     dot = _cp(p, 1)
@@ -1777,12 +1779,12 @@ def handle_drags(p, pts, closed):
             sp = abs(project(row, _cp(p, 3)) - project(row, dot))
         else:
             sp = 0.0
-        if sp > 1.0:
+        if sp > p.mm:
             p.spacing = sp
             p.set_num('PlantSpacing', sp)
     if _moved(p, last, 4) and 'PlantSize' not in lk:
         size = 2.0 * _dist(_cp(p, 4), dot)
-        if size > 1.0:
+        if size > p.mm:
             p.plant_size = size
             p.set_num('PlantSize', size)
     if _moved(p, last, 5) and closed and p.spacing > 0 and not lk & {'RowSpacing', 'RowShift'}:

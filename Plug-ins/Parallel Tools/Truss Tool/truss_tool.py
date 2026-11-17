@@ -19,8 +19,8 @@ import re
 
 import vs
 
-VERSION = '0.15.1'
-VERSION_DATE = '2026-11-09'
+VERSION = '0.15.3'
+VERSION_DATE = '2026-11-17'
 AUTHOR = 'Ian Thrush / Parallel Architecture NZ'
 WEBSITE = 'github.com/itchyNZL/parallel-tools'
 TOOL_FOLDER = 'Truss Tool'
@@ -182,7 +182,10 @@ class Params:
 
         # Override Auto unticked: Setback, Web Centres, Cove Length, Attic Width
         # and Ceiling Pitch are automatic (the values are written back, greyed).
-        self.auto_override = self._bool('AutoOverride')
+        # A shell without the AutoOverride parameter reads blank (not True or
+        # False): the fields are then editable, 0 or blank meaning automatic, so
+        # an older shell never leaves them locked (GitHub issue #5).
+        self.auto_override = self._str('AutoOverride').strip().lower() != 'false'
         if not self.auto_override:
             self.setback = 0.0
             self.vert_ctr, self.girder_ctr = 600 * mm, 1200 * mm
@@ -461,7 +464,10 @@ def build_dual(p):
             if on and len(sb) >= 3:
                 g.bearers.append((sb, T / 2.0, T / 2.0 + p.thick))
         if p.soffit_drop < 0:
-            cut_tails(g, min(botL, botR))
+            if right_tail_moves(p):
+                cut_tails(g, botL, L, 'left')     # the right: apply_right_overhang
+            else:
+                cut_tails(g, min(botL, botR))
 
     g.plan_x = (-OH, L + OH)
     return apply_right_overhang(p, g, tR, HR, cR)
@@ -481,22 +487,40 @@ def bearer_profile(p, right, H, t, c, oh, L):
     return poly, bottom
 
 
-def cut_tails(g, bottom):
+def cut_tails(g, bottom, L=0.0, side=None):
     """Negative Soffit Bearer Drop: cut the tails level with the bearer
-    underside (never above the wall plate)."""
+    underside (never above the wall plate). side 'left' / 'right': only the
+    members that run out past that wall (Two Overhangs: each tail is cut to
+    its own bearer)."""
     cut = min(bottom, 0.0)
-    g.members = [m for m in (clip(m, 0.0, 1.0, -cut) for m in g.members) if len(m) >= 3]
+
+    def wanted(m):
+        if side == 'left':
+            return min(x for x, _ in m) < -0.01
+        if side == 'right':
+            return max(x for x, _ in m) > L + 0.01
+        return True
+
+    g.members = [m for m in (clip(m, 0.0, 1.0, -cut) if wanted(m) else m for m in g.members)
+                 if len(m) >= 3]
+
+
+def right_tail_moves(p):
+    """Two Overhangs with a different Overhang (R): apply_right_overhang
+    moves the right-hand tail."""
+    if not p.two_overhangs:
+        return False
+    oh, oh_r = p.overhang, p.overhang_r
+    return not (abs(oh - oh_r) < 0.01 and (oh > 0 or oh_r <= 0))
 
 
 def apply_right_overhang(p, g, t_r, h_r, c_r):
     """Two Overhangs: move the right-hand tail ends from Overhang to
     Overhang (R) along the right-hand slope, and rebuild that soffit bearer.
     t_r, h_r, c_r: right-hand tan(pitch), heel and cos(pitch)."""
-    if not p.two_overhangs:
+    if not right_tail_moves(p):
         return g
     L, oh, oh_r = p.span, p.overhang, p.overhang_r
-    if abs(oh - oh_r) < 0.01 and (oh > 0 or oh_r <= 0):
-        return g
     x_end, dy = L + oh, t_r * (oh - oh_r)
     roof_y = h_r + t_r * (L - x_end)          # roof line at the right-hand tail end
 
@@ -523,6 +547,12 @@ def apply_right_overhang(p, g, t_r, h_r, c_r):
         if len(sb) >= 3:
             kept.append((sb, z[0], z[1]))
     g.bearers = kept
+    # Negative Soffit Bearer Drop: the right-hand tail is cut here, after it
+    # has moved, level with its own bearer. Until 0.15.3 both tails were cut
+    # before the move, and the cut corner stayed behind as a spike.
+    if p.soffit_drop < 0 and oh_r > 0 and (p.soffit_bearers or p.bearer_right):
+        _sb, bottom = bearer_profile(p, True, h_r, t_r, c_r, oh_r, L)
+        cut_tails(g, bottom, L, 'right')
     g.plan_x = (g.plan_x[0], L + oh_r)
     return g
 
@@ -892,7 +922,10 @@ def _soffit_bearers(g, p, f):
             if b_right:
                 g.bearers.append((mirror_x(sb, L / 2.0), z1, z2))
         if p.soffit_drop < 0:
-            cut_tails(g, bottom)
+            if right_tail_moves(p):
+                cut_tails(g, bottom, L, 'left')   # the right: apply_right_overhang
+            else:
+                cut_tails(g, bottom)
 
     # High end of a half truss: level soffit bearer at the underside of the
     # top chord at the high wall, out to the end of the high overhang.

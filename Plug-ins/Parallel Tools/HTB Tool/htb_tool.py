@@ -35,8 +35,8 @@ import math
 
 import vs
 
-VERSION = '0.5.1'
-VERSION_DATE = '2026-11-09'
+VERSION = '0.5.2'
+VERSION_DATE = '2026-11-17'
 WEBSITE = 'github.com/itchyNZL/parallel-tools'
 TOOL_FOLDER = 'HTB Tool'
 
@@ -56,6 +56,8 @@ AUTO_PLANE_CLASSES = set(PLANE_CLASS_PREFIX + n for n in PROFILE_LABELS.values()
 # Site-HTB-Plane <Profile> into the bare Site-HTB-Plane: that is treated as empty too
 AUTO_PLANE_CLASSES.add(PLANE_CLASS_PREFIX.strip())
 SIDE_CLASS_PREFIX = 'Site-HTB-'
+# The parameter is called Side (what the records of existing objects hold) but is shown as
+# Elevation: the north elevation, the east elevation ... its pop-up lists these full names
 SIDE_NAMES = {'N': 'North', 'NE': 'North East', 'E': 'East', 'SE': 'South East',
               'S': 'South', 'SW': 'South West', 'W': 'West', 'NW': 'North West'}
 SIDE_CLASSES = set(SIDE_CLASS_PREFIX + n for n in SIDE_NAMES.values())
@@ -106,9 +108,18 @@ ABOUT_UPDATE_ID = 3101
 
 
 def read_real(recName, objH, field):
+    """A number or dimension field. ValidNumStr first: it reads a dimension as
+    Vectorworks shows it (2500mm with unit marks on, 8'2" in a feet and inches file),
+    which Str2Num alone does not."""
     txt = vs.GetRField(objH, recName, field)
     if txt is None or txt == '':
         return 0.0
+    try:
+        ok, v = vs.ValidNumStr(str(txt).strip())
+        if ok:
+            return v
+    except Exception:
+        pass
     return vs.Str2Num(txt)
 
 
@@ -284,6 +295,27 @@ def dash_segment(r0, z0, r1, z1, true_length, seg, gap, cls):
         start += seg + gap
 
 
+_popup_cache = {}
+
+
+def popup_has(recName, field, choice):
+    """Whether the plug-in's pop-up for field lists choice (asked once a session for
+    each). False if Vectorworks can't say, so nothing is rewritten on a guess."""
+    key = (recName, field, choice)
+    if key not in _popup_cache:
+        found = False
+        try:
+            r = vs.GetPluginChoiceIndex(recName, field, choice)
+            if isinstance(r, (tuple, list)):
+                found = bool(r[0]) and int(r[-1]) >= 0
+            else:
+                found = isinstance(r, int) and not isinstance(r, bool) and r >= 0
+        except Exception as e:
+            _log('popup_has', repr(e))
+        _popup_cache[key] = found
+    return _popup_cache[key]
+
+
 def get_plugin_name(objName):
     # The plug-in's name is also its parameter record's name
     try:
@@ -387,7 +419,7 @@ def _num_text(n):
 def link_label(side, myNo, nbrNo, has_above, mismatch=False):
     """What the point links to: 'North 3 > 2', 'North 1 (start)' (lowest of its Side, with
     points above it), 'North 1 (unlinked)' (alone on its Side)."""
-    name = '%s %s' % (side or '(no side)', _num_text(myNo))
+    name = '%s %s' % (side or '(no elevation)', _num_text(myNo))
     if nbrNo is not None:
         text = '%s > %s' % (name, _num_text(nbrNo))
         return text + ' (profiles differ)' if mismatch else text
@@ -460,6 +492,16 @@ def draw_object():
     heightAtBoundary = pts[0][1]
     dashed = read_bool(recName, objH, 'Dashed')
     mySide = read_str(recName, objH, 'Side')
+    # Shown as Elevation (North, North East ...): the parameter is still called Side, so
+    # nothing already drawn loses it. The pop-up lists the full names; a point that says N,
+    # NE ... (placed before the pop-up was changed) gets the full name written in, so the
+    # pop-up shows it and the tool bar's pick matches.
+    # Only once the pop-up has the full names: with the older pop-up (N, NE ...) a full name
+    # would show as N, where the short one still shows correctly.
+    full = side_name(mySide)
+    if full in SIDE_NAMES.values() and mySide != full and popup_has(recName, 'Side', full):
+        vs.SetRField(objH, recName, 'Side', full)
+        mySide = full
     planeClass = read_str(recName, objH, 'Plane Class')
     # An empty Plane Class, or one of the Site-HTB-Plane <Profile> names, follows the Profile
     # (written into the field so Object Info shows it). A class typed in by hand stays.
@@ -661,7 +703,7 @@ LAYOUT = [
     ('Plane', ['Plane Class']),
     ('About', ['Version']),
 ]
-LABELS = {'Side': 'Side', 'Point_No': 'Point No', 'Description': 'Description',
+LABELS = {'Side': 'Elevation', 'Point_No': 'Point No', 'Description': 'Description',
           'Profile': 'Profile', 'Height at Boundary': 'Height at Boundary',
           'Allowable Height': 'Allowable Height', 'Daylight Angle': 'Daylight Angle (deg)',
           'Shelf': 'Shelf', 'Slope 1 to Height': 'Slope 1 to Height',
@@ -1016,7 +1058,7 @@ TOOL_NAME = 'HTB'
 # vstSetPtBehavior 2: two clicks
 TOOL_MODES = (('', 2, 'Click the point on the boundary, then a second point along the boundary'),)
 # tool bar pull-downs: (label, field, choices; the first until one is picked)
-TOOL_PULLDOWNS = (('Side:', 'Side', ('North', 'North East', 'East', 'South East', 'South',
+TOOL_PULLDOWNS = (('Elevation:', 'Side', ('North', 'North East', 'East', 'South East', 'South',
                                       'South West', 'West', 'North West')),)
 # the spanner: (field, label, 'num' / 'text' / choices)
 TOOL_DEFAULTS = (

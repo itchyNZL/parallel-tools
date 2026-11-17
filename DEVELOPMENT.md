@@ -67,6 +67,16 @@ The spanner opens Default Settings, set by `TOOL_DEFAULTS` (Break Line, Planting
 2. Run `python dev/build_zips.py` (it stops if the shared code needs a sync): one zip per tool and one with all of them in `dist/`, and `versions.json` rewritten from each tool's version. Each zip holds only what's needed to run the tools: a `Parallel Tools` folder with the `.vso`, the `.vst` and each tool's `.py` in its code folder, plus the README and LICENSE. Everything else (tool READMEs, changelogs, stubs, icons) is in this repo.
 3. Attach the zips to a GitHub release and push `versions.json`: each tool's About > Check for updates... reads it.
 
+### When to release
+
+Fixes are batched so people aren't asked to re-download for every small change. Every report goes in [GitHub Issues](https://github.com/itchyNZL/parallel-tools/issues) with a label, which decides when it ships:
+
+- **`urgent`**: a patch release (0.23.1 to 0.23.2) of just that tool, within a day or two, with nothing else added. For a tool that won't load, objects that fail to draw, lost settings or objects changed on file open, or wrong output that could be issued without anyone noticing.
+- **`bug`**: fixed as it comes in, then released with the others every three to four weeks, or sooner once there's a useful batch.
+- **`enhancement`**: new features go in a minor release (0.23 to 0.24) when they're ready.
+
+New versions run in our office for a few days before they go on GitHub.
+
 ## Developer switch
 
 A file named `vectorworks_tools_dev.txt` in a Vectorworks version's user data folder (for example `%APPDATA%/Nemetschek/Vectorworks/2027/`), holding the path of the development folder that holds the tool folders (in this repo, `Plug-ins/Parallel Tools`), makes that machine load the code from there instead of the installed copy. Without the file nothing changes.
@@ -114,6 +124,9 @@ A file named `vectorworks_tools_dev.txt` in a Vectorworks version's user data fo
 | TagLine | Tag Line | Pop-up | Full width, Header | Full width |
 | ClassTemplate | Class Template | Text | | Notes-Comment-{Audience}-{Status} |
 | LeaderMarkers | Leader Markers | Text | | |
+| NewNumbering | New Get | Pop-up | Next number, Lowest free | Next number |
+| FontName | Font | Text | | |
+| FontSize | Text Size (pt) | Number | | 0 |
 | **Internal** | | | | |
 | ControlPoint01X | Tag X | X Coordinate | | 0 |
 | ControlPoint01Y | Tag Y | Y Coordinate | | 0 |
@@ -161,6 +174,12 @@ Notes: From and To for new comments come from Preferences (e.g. your initials in
 | NoteAlign | Note Align | Pop-up | Auto, Left, Right | Auto |
 | ClassTemplate | Class Template | Text | | Revision-{Rev} |
 | ShowLatest | Show Latest | Number | | 2 |
+| DateFormat | Date Format | Pop-up | dd/mm/yy, d Mon yy, yyyy-mm-dd, mm/dd/yy | dd/mm/yy |
+| FontName | Font | Text | | |
+| FontSize | Text Size (pt) | Number | | 0 |
+| DateDay | Day | Integer | | 0 |
+| DateMonth | Month | Pop-up | Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec | Jan |
+| DateYear | Year | Integer | | 0 |
 | **Internal** | | | | |
 | ControlPoint01X | Knee X | X Coordinate | | 0 |
 | ControlPoint01Y | Marker Y | Y Coordinate | | 0 |

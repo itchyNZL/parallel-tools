@@ -21,8 +21,8 @@ import math
 
 import vs
 
-VERSION = '0.23.1'
-VERSION_DATE = '2026-11-09'
+VERSION = '0.24.0'
+VERSION_DATE = '2026-11-17'
 WEBSITE = 'github.com/itchyNZL/parallel-tools'
 TOOL_FOLDER = 'Comment Tool'
 
@@ -61,6 +61,9 @@ TYPES = ('Fix', 'Note', 'Nice')
 AUDIENCES = ('Internal', 'Client')
 # How a copy is numbered (Settings > Copies)
 COPY_MODES = ('Next number', 'Next free after copied', 'Lowest free')
+# How a new comment is numbered (Settings > New get): Lowest free fills the
+# gaps left by deleted comments
+NEW_MODES = ('Next number', 'Lowest free')
 
 # One-click buttons in Object Info, each group under its own heading:
 # heading -> (field, Params attribute, [(button id, value)]). A click sets
@@ -205,10 +208,14 @@ class Params:
         # Number Prefix (blank = '#'); Copies Fill Gaps
         self.prefix = self._str('NumberPrefix').strip() or '#'
         self.copy_mode = match_choice(self._str('CopyNumbering'), COPY_MODES, COPY_MODES[0])
+        self.new_mode = match_choice(self._str('NewNumbering'), NEW_MODES, NEW_MODES[0])
         # Closed comments collapse to the header line (blank = on)
         self.collapse_closed = self._str('CollapseClosed').strip().lower() != 'false'
         # Tag Line (blank = full width, as before)
         self.tag_line = match_choice(self._str('TagLine'), TAG_LINES, TAG_LINES[0])
+        # Font / Text Size (blank / 0: the comment's own Text > Format Text)
+        self.font = font_name(self._str('FontName'))
+        self.font_size = max(0.0, self._num('FontSize'))
 
     def _str(self, name):
         return vs.GetRField(self.h, self.rec, name)
@@ -549,6 +556,33 @@ def _ensure_class(name, status, client=False):
 ovUsePIOTextAttributes = 800
 
 
+def font_name(text):
+    """The Font setting as a font name. Only digits is no name: it is what a
+    FontName parameter made as a number in the plug-in gives (0), and a
+    number field can't be blanked. Read as blank, so the text keeps its own
+    Text > Format Text."""
+    text = (text or '').strip()
+    return '' if text.isdigit() else text
+
+
+def apply_font(h, name, size):
+    """Font (Settings, a style) and size in points onto a text the tool has
+    made. Blank / 0 leaves what the comment's own Format Text gives. The font
+    ID is asked for each time: it belongs to the file, not the session."""
+    if not (name or size > 0):
+        return
+    try:
+        n = vs.GetTextLength(h)
+        if name:
+            fid = vs.GetFontID(name)
+            if isinstance(fid, int) and not isinstance(fid, bool):
+                vs.SetTextFont(h, 0, n, fid)
+        if size > 0:
+            vs.SetTextSize(h, 0, n, size)
+    except Exception as e:
+        _log('font', repr(name), size, repr(e))
+
+
 # LeaderMarkers: "byclass|start|end|2", each marker
 # "style,angle,length,width,basis,thickness,shown" (lengths in page inches).
 # Shown applies with class markers too (the class gives the style, the tick
@@ -701,6 +735,7 @@ class Painter:
         vs.CreateText(s)
         h = vs.LNewObj()
         self.finish(h)
+        apply_font(h, getattr(p, 'font', ''), getattr(p, 'font_size', 0.0))
         vs.SetTextJust(h, just)             # 1 left, 3 right
         vs.SetTextVerticalAlign(h, valign)      # 1 top, 5 bottom
         if wrap:
@@ -778,7 +813,7 @@ def next_number(p, after=None, lowest=False):
     """Next number in the file (highest + 1). Gaps left by deleted comments
     are not filled; the number of a deleted highest comment is used again.
     after: the next free number after this one instead; lowest: the lowest
-    free number (Settings > Copies)."""
+    free number (Settings > New get / Copies get)."""
     rec_name = _record_name(p.rec)
     used = []
 
@@ -803,11 +838,16 @@ def next_number(p, after=None, lowest=False):
     return str(max(used) + 1 if used else 1)
 
 
+# Month names from the tool's own list, so they stay English whatever the
+# computer's language (Python's own date formatting follows the computer).
+MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+
+
 def short_date(iso):
     """2026-10-13 -> 13 Oct (the sheet); the record keeps the ISO date."""
     try:
         d = datetime.date.fromisoformat(iso_date(iso))
-        return '%d %s' % (d.day, d.strftime('%b'))
+        return '%d %s' % (d.day, MONTHS[d.month - 1])
     except Exception:
         return iso
 
@@ -1376,7 +1416,7 @@ def _tidy_fields(p, first):
     """Number, Location, a copy made new (or the dates locked), Status and
     Type spelled out, and the Done stamp."""
     if not p.number:
-        p.number = next_number(p)
+        p.number = next_number(p, lowest=(p.new_mode == 'Lowest free'))
         p.set('Number', p.number)
     where = location(p)
     if where and p._str('Location') != where:
@@ -1608,7 +1648,8 @@ def init_layout():
 # By Instance. Set when a style is first used; change it in Edit Style.
 STYLE_PARAMS = ('Outline', 'CloudSize', 'LeaderSetback', 'Shoulder', 'ShowNumber', 'ShowDate',
                 'ShowTo', 'ShowFrom', 'ClassTemplate', 'UseType', 'UseAudience',
-                'NumberPrefix', 'CopyNumbering', 'CollapseClosed', 'TagLine')
+                'NumberPrefix', 'CopyNumbering', 'CollapseClosed', 'TagLine', 'NewNumbering',
+                'FontName', 'FontSize')
 kByInstance, kByStyle = 0, 1
 
 
@@ -1658,7 +1699,8 @@ def by_style(h, field):
 
 SETTINGS_FIELDS = ('Outline', 'CloudSize', 'LeaderSetback', 'Shoulder', 'NumberPrefix', 'CopyNumbering',
                    'UseType', 'UseAudience', 'ShowNumber', 'ShowDate', 'ShowFrom', 'ShowTo',
-                   'ClassTemplate', 'LeaderMarkers', 'CollapseClosed', 'TagLine')
+                   'ClassTemplate', 'LeaderMarkers', 'CollapseClosed', 'TagLine', 'NewNumbering',
+                   'FontName', 'FontSize')
 
 
 def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
@@ -1680,6 +1722,8 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
     audience, ctype = sample or (match_choice(get('Audience'), AUDIENCES, AUDIENCES[0]),
                                  match_choice(get('CommentType'), TYPES, 'Note'))
     has_tag_line = bool(get('TagLine').strip())     # blank: parameter not in the .vso yet
+    has_new_numbering = bool(get('NewNumbering').strip())
+    has_font = bool(get('FontSize').strip())
 
     # Cloud and Width show the real size: a stored 0 (older comments and
     # presets) is the built-in default, shown as that number
@@ -1715,13 +1759,23 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
         vs.CreateCheckBox(dlg, cid, label)
     radios.create(212, 'When closed:', 14, CLOSED, [(214, 'False', 'Full tag'), (215, 'True', 'Header only')])
     radios.create(216, 'Line:', 14, LINES, [(217, 'Full width', 'Full width'), (218, 'Header', 'Header')])
+    # Font and size: blank / 0 leave the comment's own Text > Format Text
+    vs.CreateStaticText(dlg, 220, 'Font:', 14)
+    vs.CreateEditText(dlg, 221, font_name(get('FontName')), 22)
+    vs.CreateStaticText(dlg, 222, 'blank = as Text > Format Text', -1)
+    hints.append(222)
+    ok_size, size = vs.ValidNumStr(get('FontSize').strip() or '0')
+    num_row(223, 'Text size (pt):', 224, '%g' % (size if ok_size and size > 0 else 0), 225,
+            '0 = as Text > Format Text')
     # Numbering
     vs.CreateStaticText(dlg, 301, 'Prefix:', 14)
     vs.CreateEditText(dlg, 302, get('NumberPrefix').strip() or '#', 8)
-    vs.CreateStaticText(dlg, 303, 'Copies get:', 14)
+    vs.CreateStaticText(dlg, 303, 'New get:', 14)
     vs.CreatePullDownMenu(dlg, 304, 22)
-    vs.CreateStaticText(dlg, 305, 'the number a copied comment takes', -1)
-    hints.append(305)
+    vs.CreateStaticText(dlg, 306, 'Copies get:', 14)
+    vs.CreatePullDownMenu(dlg, 307, 22)
+    vs.CreateStaticText(dlg, 308, 'Lowest free fills the gaps left by deleted comments', -1)
+    hints.append(308)
     # Class
     vs.CreateStaticText(dlg, 401, 'Template:', 14)
     vs.CreateEditText(dlg, 402, get('ClassTemplate'), 40)
@@ -1764,11 +1818,14 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
     radios.place(212, CLOSED)
     vs.SetBelowItem(dlg, 212, 216, 0, 0)
     radios.place(216, LINES)
+    below(216, 220, 221, 222)
+    below(220, 223, 224, 225)
     vs.SetBelowItem(dlg, 200, 300, 0, 1)
     vs.SetFirstGroupItem(dlg, 300, 301)
     vs.SetRightItem(dlg, 301, 302, 0, 0)
     below(301, 303, 304)
-    vs.SetBelowItem(dlg, 304, 305, 0, 0)            # description under the pull-down
+    below(303, 306, 307)
+    vs.SetBelowItem(dlg, 306, 308, 0, 0)            # description under the pull-downs
     vs.SetBelowItem(dlg, 300, 400, 0, 1)
     vs.SetFirstGroupItem(dlg, 400, 401)
     vs.SetRightItem(dlg, 401, 402, 0, 0)
@@ -1822,10 +1879,11 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
             radios.set(MARKERS, by_class)
             for cid, _label, field in shows:
                 vs.SetBooleanItem(dlg, cid, get(field).strip().lower() == 'true')
-            mode = match_choice(get('CopyNumbering'), COPY_MODES, COPY_MODES[0])
-            for i, o in enumerate(COPY_MODES):
-                vs.AddChoice(dlg, 304, o, i)
-            vs.SelectChoice(dlg, 304, COPY_MODES.index(mode), True)
+            for pid, field, modes in ((304, 'NewNumbering', NEW_MODES), (307, 'CopyNumbering', COPY_MODES)):
+                mode = match_choice(get(field), modes, modes[0])
+                for i, o in enumerate(modes):
+                    vs.AddChoice(dlg, pid, o, i)
+                vs.SelectChoice(dlg, pid, modes.index(mode), True)
             for pid, cid, (m, shown) in ((506, 507, start), (509, 510, end)):
                 vs.SetMarkerValue(dlg, pid, *m)
                 vs.SetBooleanItem(dlg, cid, shown)
@@ -1836,8 +1894,14 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
             if not has_tag_line:
                 vs.EnableItem(dlg, 216, False)
                 radios.enable(LINES, False)
+            if not has_new_numbering:
+                for item in (303, 304):
+                    vs.EnableItem(dlg, item, False)
+            for lid, fid, field in ((220, 221, 'FontName'), (223, 224, 'FontSize')):
+                vs.EnableItem(dlg, lid, has_font)
+                vs.EnableItem(dlg, fid, has_font and not styled(field))
             for fid, field in ((202, 'Shoulder'), (205, 'TagWidth'), (302, 'NumberPrefix'),
-                               (304, 'CopyNumbering'), (402, 'ClassTemplate')):
+                               (304, 'NewNumbering'), (307, 'CopyNumbering'), (402, 'ClassTemplate')):
                 vs.EnableItem(dlg, fid, not styled(field))
             for cid, _label, field in shows:
                 vs.EnableItem(dlg, cid, not styled(field))
@@ -1868,10 +1932,16 @@ def settings_form(title, get, styled, tag_mm, status='Open', sample=None):
             if has_tag_line:
                 result['TagLine'] = radios.chosen(LINES) or TAG_LINES[0]
             result['NumberPrefix'] = safe_text(vs.GetItemText(dlg, 302).strip()) or '#'
-            picked = _choice_text(vs.GetSelectedChoiceInfo(dlg, 304, 0))
-            if picked:
-                result['CopyNumbering'] = picked
+            for pid, field, ok in ((304, 'NewNumbering', has_new_numbering), (307, 'CopyNumbering', True)):
+                picked = _choice_text(vs.GetSelectedChoiceInfo(dlg, pid, 0))
+                if ok and picked:
+                    result[field] = picked
             result['ClassTemplate'] = safe_text(vs.GetItemText(dlg, 402).strip())
+            if has_font:
+                result['FontName'] = safe_text(vs.GetItemText(dlg, 221).strip())
+                ok, v = vs.ValidNumStr(vs.GetItemText(dlg, 224).strip() or '0')
+                if ok:
+                    result['FontSize'] = '%g' % max(0.0, v)
             result['LeaderMarkers'] = write_markers(
                 radios.chosen(MARKERS) is not False,
                 (tuple(vs.GetMarkerValue(dlg, 506)), vs.GetBooleanItem(dlg, 507)),
@@ -2289,10 +2359,11 @@ NEW_COMMENT_FIELDS = ('Audience', 'CommentType', 'From', 'To')
 PREF_DEFAULTS = {
     'Audience': 'Internal', 'CommentType': 'Note', 'From': '', 'To': '',
     'Outline': 'Line', 'CloudSize': CLOUD_MM, 'LeaderSetback': 1.5, 'Shoulder': 2.0, 'TagWidthMM': TAG_WIDTH_MM,
-    'NumberPrefix': '#', 'CopyNumbering': 'Next number', 'UseType': True, 'UseAudience': True,
+    'NumberPrefix': '#', 'NewNumbering': 'Next number', 'CopyNumbering': 'Next number', 'UseType': True, 'UseAudience': True,
     'ShowNumber': True, 'ShowDate': True, 'ShowFrom': False, 'ShowTo': True,
     'CollapseClosed': True, 'TagLine': 'Full width',
     'ClassTemplate': 'Notes-Comment-{Audience}-{Status}', 'LeaderMarkers': '', 'Style': '',
+    'FontName': '', 'FontSize': 0.0,
 }
 
 

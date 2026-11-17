@@ -26,8 +26,8 @@ import math
 
 import vs
 
-VERSION = '0.8.1'
-VERSION_DATE = '2026-11-09'
+VERSION = '0.9.0'
+VERSION_DATE = '2026-11-17'
 WEBSITE = 'github.com/itchyNZL/parallel-tools'
 TOOL_FOLDER = 'Revision Tool'
 
@@ -129,13 +129,76 @@ def iso_date(text):
     return t
 
 
-def sheet_date(iso):
-    """2026-02-17 -> 17/02/26 on the sheet; the record keeps the ISO date."""
+# Month names from the tool's own list, so they stay English whatever the
+# computer's language (Python's own date formatting follows the computer).
+MONTHS = ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec')
+# How the date reads on the sheet (Date Format: Settings, a style). It belongs
+# to the drawing, never to the user's computer. The first is how every
+# revision read before 0.9.0, and what a blank (older shell) means.
+DATE_FORMATS = ('dd/mm/yy', 'd Mon yy', 'yyyy-mm-dd', 'mm/dd/yy')
+
+
+def sheet_date(iso, fmt=''):
+    """2026-02-17 -> 17/02/26 on the sheet (or 17 Feb 26, 2026-02-17,
+    02/17/26, by Date Format); the record keeps the ISO date."""
     try:
         d = datetime.date.fromisoformat(iso_date(iso))
-        return d.strftime('%d/%m/%y')
     except Exception:
         return iso
+    f = match_choice(fmt, DATE_FORMATS, DATE_FORMATS[0])
+    yy = '%02d' % (d.year % 100)
+    if f == 'd Mon yy':
+        return '%d %s %s' % (d.day, MONTHS[d.month - 1], yy)
+    if f == 'yyyy-mm-dd':
+        return d.isoformat()
+    if f == 'mm/dd/yy':
+        return '%02d/%02d/%s' % (d.month, d.day, yy)
+    return '%02d/%02d/%s' % (d.day, d.month, yy)
+
+
+def date_parts(iso):
+    """(day, month, year) of an ISO date, or None if it isn't one."""
+    try:
+        d = datetime.date.fromisoformat(iso_date(iso))
+        return d.day, d.month, d.year
+    except Exception:
+        return None
+
+
+def month_number(text):
+    """1-12 from Jan ... Dec (or January, or a number), else None."""
+    t = (text or '').strip()
+    if t.isdigit():
+        return int(t) if 1 <= int(t) <= 12 else None
+    for i, m in enumerate(MONTHS):
+        if t[:3].lower() == m.lower():
+            return i + 1
+    return None
+
+
+def _whole(text):
+    """A whole number from a field's text ('9', '9.0', '2,026'), or None."""
+    t = str(text if text is not None else '').strip().replace(',', '')
+    try:
+        return int(round(float(t)))
+    except (ValueError, OverflowError):
+        return None
+
+
+def compose_date(day, month, year, fallback=''):
+    """ISO date from separate Day, Month (a name or number) and Year texts.
+    A day past the end of the month is the month's last day (31 Feb -> 28 Feb),
+    a two-figure year is 20xx. fallback if they don't make a date."""
+    d, y, m = _whole(day), _whole(year), month_number(month)
+    if d is None or y is None or m is None or d < 1 or y < 0:
+        return fallback
+    if y < 100:
+        y += 2000
+    try:
+        import calendar
+        return datetime.date(y, m, min(d, calendar.monthrange(y, m)[1])).isoformat()
+    except Exception:
+        return fallback
 
 
 def match_choice(raw, options, default=None):
@@ -161,7 +224,7 @@ def show_latest(text):
     """Show Latest as a whole number: blank (or not a number) = 2, 0 = all."""
     try:
         return max(0, int(round(float((text or '').strip()))))
-    except ValueError:
+    except (ValueError, OverflowError):     # blank, text, nan, inf
         return SHOW_LATEST
 
 
@@ -206,6 +269,11 @@ class Params:
         self.note_align = match_choice(self._str('NoteAlign'), NOTE_ALIGNS, 'Auto')
         self.class_template = self._str('ClassTemplate').strip()
         self.show_latest = show_latest(self._str('ShowLatest'))
+        # Date Format (blank, older shells: dd/mm/yy as before)
+        self.date_format = match_choice(self._str('DateFormat'), DATE_FORMATS, DATE_FORMATS[0])
+        # Font / Text Size (blank / 0: the object's own Text > Format Text)
+        self.font = font_name(self._str('FontName'))
+        self.font_size = max(0.0, self._num('FontSize'))
 
     def _str(self, name):
         return vs.GetRField(self.h, self.rec, name)
@@ -607,6 +675,33 @@ def ensure_class(name, rev):
 ovUsePIOTextAttributes = 800
 
 
+def font_name(text):
+    """The Font setting as a font name. Only digits is no name: it is what a
+    FontName parameter made as a number in the plug-in gives (0), and a
+    number field can't be blanked. Read as blank, so the text keeps its own
+    Text > Format Text."""
+    text = (text or '').strip()
+    return '' if text.isdigit() else text
+
+
+def apply_font(h, name, size):
+    """Font (Settings, a style) and size in points onto a text the tool has
+    made. Blank / 0 leaves what the object's own Format Text gives. The font
+    ID is asked for each time: it belongs to the file, not the session."""
+    if not (name or size > 0):
+        return
+    try:
+        n = vs.GetTextLength(h)
+        if name:
+            fid = vs.GetFontID(name)
+            if isinstance(fid, int) and not isinstance(fid, bool):
+                vs.SetTextFont(h, 0, n, fid)
+        if size > 0:
+            vs.SetTextSize(h, 0, n, size)
+    except Exception as e:
+        _log('font', repr(name), size, repr(e))
+
+
 # The call form for a pen / fill colour that worked (index into the forms in
 # _set_colour), found on first use and kept while the module is loaded.
 _colour_form = {}
@@ -651,6 +746,7 @@ class Painter:
 
     def __init__(self, p, old=False):
         self.old = old
+        self.font, self.font_size = getattr(p, 'font', ''), getattr(p, 'font_size', 0.0)
         self.cls = class_name(p.class_template, p.rev)
         ensure_class(self.cls, p.rev)
         # The object itself goes in the same class, so Object Info shows it
@@ -762,6 +858,7 @@ class Painter:
         vs.CreateText(s)
         h = vs.LNewObj()
         self.finish(h)
+        apply_font(h, self.font, self.font_size)
         vs.SetTextJust(h, just)                 # 1 left, 2 centre, 3 right
         vs.SetTextVerticalAlign(h, valign)      # 1 top, 3 centre, 5 bottom
         if wrap:
@@ -999,9 +1096,11 @@ def safe_text(text):
 
 def revision_dialog(h, rec, new=False):
     """The Revision dialog (placing a revision, double-click, Edit
-    Revision...): Rev and Date on one line, then the note in a resizable
-    multi-line box. Changing Rev fills in the date that Rev already has on
-    this sheet. Writes the fields; True if OK."""
+    Revision...): Rev and the date on one line, then the note in a resizable
+    multi-line box. The date is a Day, a Month picked by name and a Year, so
+    it can't be misread whatever order the user is used to (0.8 read one
+    typed box day first). Changing Rev fills in the date that Rev already has
+    on this sheet. Writes the fields; True if OK."""
     def get(name):
         return vs.GetRField(h, rec, name)
 
@@ -1022,14 +1121,19 @@ def revision_dialog(h, rec, new=False):
            'Note': decode_note(get('Note')),
            'ShowTag': get('ShowTag').strip().lower() != 'false'}
     result = {}
+    # A date that isn't one ('TBC', typed in Object Info) is kept unless the
+    # day, month or year is changed here; the boxes then start from today.
+    shown = date_parts(cur['Date']) or date_parts(_today())
+    touched = [False]
     try:
         title = 'New Revision' if new else ('Edit Revision ' + cur['Rev']).strip()
         dlg = vs.CreateResizableLayout(title, False, 'OK', 'Cancel', True, True)
         vs.CreateStaticText(dlg, 10, 'Revision:', -1)
         vs.CreateEditText(dlg, 11, cur['Rev'], 5)
         vs.CreateStaticText(dlg, 12, 'Date:', -1)
-        vs.CreateEditText(dlg, 13, sheet_date(cur['Date']) if cur['Date'] else '', 10)
-        vs.CreateStaticText(dlg, 14, 'dd/mm/yy', -1)
+        vs.CreateEditText(dlg, 13, ('%d' % shown[0]) if date_parts(cur['Date']) else '', 4)
+        vs.CreatePullDownMenu(dlg, 22, 7)
+        vs.CreateEditText(dlg, 23, '%d' % shown[2], 6)
         vs.CreateStaticText(dlg, 15, 'Note:', -1)
         vs.CreateEditTextBox(dlg, 16, cur['Note'].replace('\r', '\r\n'), 50, 4)
         vs.CreateStaticText(dlg, 17, ' ' * 70, -1)     # filled in by shared_hint
@@ -1042,7 +1146,8 @@ def revision_dialog(h, rec, new=False):
         vs.SetRightItem(dlg, 10, 11, 0, 0)
         vs.SetRightItem(dlg, 11, 12, 1, 0)
         vs.SetRightItem(dlg, 12, 13, 0, 0)
-        vs.SetRightItem(dlg, 13, 14, 0, 0)
+        vs.SetRightItem(dlg, 13, 22, 0, 0)
+        vs.SetRightItem(dlg, 22, 23, 0, 0)
         vs.SetBelowItem(dlg, 10, 15, 0, 1)
         vs.SetBelowItem(dlg, 15, 16, 0, 0)
         vs.SetBelowItem(dlg, 16, 17, 0, 0)
@@ -1065,24 +1170,38 @@ def revision_dialog(h, rec, new=False):
                 text = 'Every Rev %s %s shares this date' % (rev or '?', where)
             vs.SetItemText(dlg, 17, text)
 
+        def show_date(parts):
+            vs.SetItemText(dlg, 13, '%d' % parts[0])
+            vs.SelectChoice(dlg, 22, parts[1] - 1, True)
+            vs.SetItemText(dlg, 23, '%d' % parts[2])
+
         def handler(item, data):
             if item == 12255:                       # dialog set up
-                vs.EnableItem(dlg, 14, False)       # greyed: hints only
-                vs.EnableItem(dlg, 17, False)
+                for i, name in enumerate(MONTHS):
+                    vs.AddChoice(dlg, 22, name, i)
+                vs.SelectChoice(dlg, 22, shown[1] - 1, True)
+                vs.EnableItem(dlg, 17, False)       # greyed: hints only
                 vs.EnableItem(dlg, 21, False)
                 vs.SetBooleanItem(dlg, 18, cur['ShowTag'])
                 shared_hint(cur['Rev'])
             elif item == 11:                        # Rev typed
                 rev = clean_rev(vs.GetItemText(dlg, 11))
                 d = known.get(rev, [0, ''])[1] if rev else ''
-                if d:
-                    vs.SetItemText(dlg, 13, sheet_date(d))
+                if d and date_parts(d):
+                    show_date(date_parts(d))
+                    touched[0] = True
                 if rev == NEW_SHEET and not vs.GetItemText(dlg, 16).strip():
                     vs.SetItemText(dlg, 16, NEW_SHEET_NOTE)
                 shared_hint(rev)
+            elif item in (13, 22, 23):              # day, month or year changed
+                touched[0] = True
             elif item == 1:                         # OK
                 result['Rev'] = clean_rev(vs.GetItemText(dlg, 11))
-                result['Date'] = iso_date(safe_text(vs.GetItemText(dlg, 13)))
+                if touched[0] or date_parts(cur['Date']):
+                    month = _choice_text(vs.GetSelectedChoiceInfo(dlg, 22, 0))
+                    # a day or year that isn't a number leaves the date as it was
+                    result['Date'] = compose_date(vs.GetItemText(dlg, 13), month,
+                                                  vs.GetItemText(dlg, 23), cur['Date'])
                 result['Note'] = vs.GetItemText(dlg, 16)
                 result['ShowTag'] = 'True' if vs.GetBooleanItem(dlg, 18) else 'False'
                 good, v = vs.ValidNumStr(vs.GetItemText(dlg, 20).strip() or '0')
@@ -1134,6 +1253,7 @@ def read_state(p):
     if len(parts) < 3:
         return None
     return {'rev': parts[0], 'date': parts[1], 'sheet': parts[2],
+            'parts': len(parts) > 9 and parts[9] == 'd',
             'latest': parts[4] if len(parts) > 4 else None,
             'cp1': _pt(parts[5]) if len(parts) > 6 else None,
             'cp2': _pt(parts[6]) if len(parts) > 6 else None,
@@ -1144,11 +1264,50 @@ def write_state(p, sheet, current, cps=None):
     """cps: (knee, wrap dot, leader start) as drawn, so the next redraw can
     tell which was dragged. The last part, k, says ControlPoint01 is the
     knee: no longer read, but kept so a revision opened with a version
-    before 0.7.9 is not converted again."""
+    before 0.7.9 is not converted again. A last d says the Day, Month and
+    Year fields matched the date when this was written (see sync_date_parts);
+    the points are left blank to reach it when there are none."""
     parts = [p.rev, p.date, sheet, '1' if current else '0', '%d' % p.show_latest]
-    if cps:
-        parts += ['%.6f;%.6f' % q if q else '' for q in cps] + ['k']
+    synced = getattr(p, 'parts_synced', False)
+    if cps or synced:
+        parts += ['%.6f;%.6f' % q if q else '' for q in (cps or (None, None, None))] + ['k']
+    if synced:
+        parts.append('d')
     p.set('State', '|'.join(x.replace('|', '') for x in parts))
+
+
+def sync_date_parts(p, state):
+    """Day, Month and Year in Object Info: the same date as the Date field
+    (which keeps the ISO date for worksheets and the shared date), set
+    apart so a typed date can't be misread. Whichever was changed since the
+    last draw wins: a changed Date (the Revision dialog, a worksheet, a date
+    shared from another revision) fills the three in; otherwise three that no
+    longer match the date become the date. They only win once a draw has
+    filled them in (State ends in d), so the defaults they get when the
+    parameters are added to the plug-in never overwrite a date.
+    Nothing happens while the plug-in has no DateMonth parameter."""
+    if not p._str('DateMonth').strip():
+        return
+    if state and state.get('parts') and p.date == state['date']:
+        typed = compose_date(p._str('DateDay'), p._str('DateMonth'), p._str('DateYear'))
+        if typed and typed != p.date:
+            _log('reset: date from day, month, year', p.date, '->', typed)
+            p.date = typed
+            p.set('Date', typed)
+    fill_date_parts(p)
+
+
+def fill_date_parts(p):
+    """Day, Month and Year written from the date (after anything that sets
+    it), so the next draw doesn't read them as typed in."""
+    if not p._str('DateMonth').strip():
+        return
+    parts = date_parts(p.date)
+    if parts:
+        p.set('DateDay', '%d' % parts[0])
+        p.set('DateMonth', MONTHS[parts[1] - 1])
+        p.set('DateYear', '%d' % parts[2])
+    p.parts_synced = bool(parts)
 
 
 def _cp(p, n=1):
@@ -1219,6 +1378,9 @@ PARAMS = ('Rev', 'Date', 'Note', 'Sheet', 'Outline', 'CloudSize', 'CloudHeight',
           'LeaderFixed', 'ControlPoint01X', 'ControlPoint01Y', 'ControlPoint02X',
           'ControlPoint02Y', 'ControlPoint03X', 'ControlPoint03Y',
           'State', 'Version', 'DrawnSize')
+# Added in 0.9.0. A shell without them works as before (dd/mm/yy, no Day /
+# Month / Year fields, text by Format Text), so they are logged, not asked for.
+OPTIONAL_PARAMS = ('DateFormat', 'DateDay', 'DateMonth', 'DateYear', 'FontName', 'FontSize')
 _checked = {}
 
 
@@ -1237,8 +1399,9 @@ def check_params(rec):
     if not names:
         return
     missing = [x for x in PARAMS if x not in names]
-    extra = sorted(x for x in names if x not in PARAMS)
-    _log('parameter check: missing', missing, 'not used', extra)
+    extra = sorted(x for x in names if x not in PARAMS + OPTIONAL_PARAMS)
+    _log('parameter check: missing', missing, 'not used', extra,
+         'optional not there', [x for x in OPTIONAL_PARAMS if x not in names])
     if missing:
         vs.AlrtDialog('Revision Tool: these parameters are missing from the plug-in '
                       '(Plug-in Manager > Revision Tool > Parameters; names must match '
@@ -1301,6 +1464,7 @@ def _reset(h, rec):
     _log('reset', p.rev, 'sheet', sheet, 'first' if first else state, len(pts), 'points')
     if first:
         p = _new_revision(h, rec, sheet, pts)
+    sync_date_parts(p, state)
     current = _sync_sheet(h, rec, p, state, sheet)
 
     pen = Painter(p, old=not current)
@@ -1405,6 +1569,7 @@ def _sync_sheet(h, rec, p, state, sheet):
         if d and d != p.date:
             p.date = d
             p.set('Date', d)
+            fill_date_parts(p)
     elif date_changed and p.rev:
         _log('reset: share date', p.rev, p.date)
         share_date(rec, h, sheet, p.rev, p.date)
@@ -1505,7 +1670,7 @@ def _draw_text(h, p, pen, state, k, c, away):
     gap = TEXT_GAP_MM * p.paper
     lines = []
     if p.show_date and p.date:
-        lines.append(sheet_date(p.date))
+        lines.append(sheet_date(p.date, p.date_format))
     if p.show_note and p.note:
         lines.append(p.note)
     x = c[0] + away * (p.marker_size / 2.0 + gap)
@@ -1844,11 +2009,13 @@ def update_title_block(h, rec):
 # --------------------------------------------------------------------------
 
 LAYOUT = [
-    ('Revision', ['Rev', 'Date', 'Note', 'ShowTag', 'LeaderFixed', 'CloudOffset', 'Sheet',
-                  'DrawnSize']),
+    # Date (the ISO date) shows only while the shell has no Day / Month / Year
+    ('Revision', ['Rev', 'Date', 'DateDay', 'DateMonth', 'DateYear', 'Note', 'ShowTag',
+                  'LeaderFixed', 'CloudOffset', 'Sheet', 'DrawnSize']),
     ('About', ['Version']),
 ]
-LABELS = {'Rev': 'Revision', 'Date': 'Date', 'Note': 'Note', 'Sheet': 'Sheet',
+LABELS = {'Rev': 'Revision', 'Date': 'Date', 'DateDay': 'Day', 'DateMonth': 'Month',
+          'DateYear': 'Year', 'Note': 'Note', 'Sheet': 'Sheet',
           'ShowTag': 'Show Marker and Text', 'LeaderFixed': 'Fixed Leader Start',
           'CloudOffset': 'Offset (sheet mm)', 'DrawnSize': 'Drawn Size',
           'Version': 'Version'}
@@ -1858,7 +2025,7 @@ WIDGET_BASE = 1000
 HEADING_BASE = 2000
 # Fixed widget IDs: only ever add to the end of these lists.
 WIDGET_IDS = ['Rev', 'Date', 'Note', 'Sheet', 'Version', 'ShowTag', 'LeaderFixed', 'CloudOffset',
-              'DrawnSize']
+              'DrawnSize', 'DateDay', 'DateMonth', 'DateYear']
 HEADING_IDS = ['Revision', 'About']
 
 
@@ -1913,7 +2080,8 @@ def init_layout():
 # change it in Edit Style.
 STYLE_PARAMS = ('Outline', 'CloudSize', 'CloudHeight', 'MarkerShape', 'MarkerSize',
                 'ShowLeader', 'Shoulder', 'LeaderSetback', 'ShowDate', 'ShowNote',
-                'NoteWidth', 'TextLine', 'NoteAlign', 'ClassTemplate', 'ShowLatest')
+                'NoteWidth', 'TextLine', 'NoteAlign', 'ClassTemplate', 'ShowLatest',
+                'DateFormat', 'FontName', 'FontSize')
 kByInstance, kByStyle = 0, 1
 
 
@@ -1989,7 +2157,11 @@ def settings_form(title, get, styled, rev='A'):
         'LeaderSetback': (306, 'Setback (sheet mm):', 307, 308, 'gap between the cloud and the leader', 0),
         'NoteWidth': (404, 'Wrap at (sheet mm):', 405, 406, '0 = no wrap', 0),
         'ShowLatest': (505, 'Show latest:', 506, 507, 'revisions per sheet in colour, older grey (0 = all)', 0),
+        'FontSize': (423, 'Text size (pt):', 424, 425, '0 = as Text > Format Text', 0),
     }
+    # blank: the parameter is not in the plug-in yet (an older shell)
+    has_date_format = bool(get('DateFormat').strip())
+    has_font = bool(get('FontSize').strip())
     checks = ((302, 'Show leader', 'ShowLeader'), (402, 'Date', 'ShowDate'), (403, 'Note', 'ShowNote'))
 
     def number(field):
@@ -2037,6 +2209,13 @@ def settings_form(title, get, styled, rev='A'):
     num_row('NoteWidth')
     radio_row(407, 'Line:', text_lines)
     radio_row(413, 'Note align:', note_aligns)
+    vs.CreateStaticText(dlg, 418, 'Date format:', 14)
+    vs.CreatePullDownMenu(dlg, 419, 14)
+    vs.CreateStaticText(dlg, 420, 'Font:', 14)
+    vs.CreateEditText(dlg, 421, font_name(get('FontName')), 22)
+    vs.CreateStaticText(dlg, 422, 'blank = as Text > Format Text', -1)
+    hints.append(422)
+    num_row('FontSize')
     # Class
     vs.CreateStaticText(dlg, 501, 'Template:', 14)
     vs.CreateEditText(dlg, 502, get('ClassTemplate'), 30)
@@ -2083,6 +2262,12 @@ def settings_form(title, get, styled, rev='A'):
     place_radios(407, text_lines)
     vs.SetBelowItem(dlg, 407, 413, 0, 0)
     place_radios(413, note_aligns)
+    vs.SetBelowItem(dlg, 413, 418, 0, 0)
+    vs.SetRightItem(dlg, 418, 419, 0, 0)
+    vs.SetBelowItem(dlg, 418, 420, 0, 0)
+    vs.SetRightItem(dlg, 420, 421, 0, 0)
+    vs.SetRightItem(dlg, 421, 422, 0, 0)
+    below_num(420, 'FontSize')
     vs.SetBelowItem(dlg, 400, 500, 0, 1)
     vs.SetFirstGroupItem(dlg, 500, 501)
     vs.SetRightItem(dlg, 501, 502, 0, 0)
@@ -2135,6 +2320,10 @@ def settings_form(title, get, styled, rev='A'):
                 vs.AddChoice(dlg, 110, hname, i)
             height = match_choice(get('CloudHeight'), heights, 'Medium')
             vs.SelectChoice(dlg, 110, heights.index(height), True)
+            for i, fname in enumerate(DATE_FORMATS):
+                vs.AddChoice(dlg, 419, fname, i)
+            fmt = match_choice(get('DateFormat'), DATE_FORMATS, DATE_FORMATS[0])
+            vs.SelectChoice(dlg, 419, DATE_FORMATS.index(fmt), True)
             for cid, _label, field in checks:
                 vs.SetBooleanItem(dlg, cid, get(field).strip().lower() != 'false')
             # what a style controls is greyed
@@ -2147,6 +2336,12 @@ def settings_form(title, get, styled, rev='A'):
             vs.EnableItem(dlg, 207, not styled('MarkerSize'))
             vs.EnableItem(dlg, 502, not styled('ClassTemplate'))
             vs.EnableItem(dlg, 506, not styled('ShowLatest'))
+            for item in (418, 419):
+                vs.EnableItem(dlg, item, has_date_format and not styled('DateFormat'))
+            vs.EnableItem(dlg, 420, has_font)
+            vs.EnableItem(dlg, 421, has_font and not styled('FontName'))
+            vs.EnableItem(dlg, 423, has_font)
+            vs.EnableItem(dlg, 424, has_font and not styled('FontSize'))
             for hid in hints:
                 vs.EnableItem(dlg, hid, False)      # greyed: descriptions only
             enable()
@@ -2165,6 +2360,8 @@ def settings_form(title, get, styled, rev='A'):
                 if value:
                     result[field] = value
             for field, (_l, _t, fid, _h, _x, _d) in nums.items():
+                if field == 'FontSize' and not has_font:
+                    continue
                 ok, v = vs.ValidNumStr(vs.GetItemText(dlg, fid).strip() or '0')
                 if ok:
                     v = max(0.0, v)
@@ -2172,6 +2369,11 @@ def settings_form(title, get, styled, rev='A'):
             picked = _choice_text(vs.GetSelectedChoiceInfo(dlg, 110, 0))
             if picked:
                 result['CloudHeight'] = picked
+            picked = _choice_text(vs.GetSelectedChoiceInfo(dlg, 419, 0))
+            if has_date_format and picked:
+                result['DateFormat'] = picked
+            if has_font:
+                result['FontName'] = safe_text(vs.GetItemText(dlg, 421).strip())
             for cid, _label, field in checks:
                 result[field] = 'True' if vs.GetBooleanItem(dlg, cid) else 'False'
             result['ClassTemplate'] = safe_text(vs.GetItemText(dlg, 502).strip())
@@ -2451,8 +2653,18 @@ def check_updates():
 
 
 def widget_prep(h, rec):
+    # Day, Month and Year stand in for Date once the plug-in has them
+    has_parts = bool(vs.GetRField(h, rec, 'DateMonth').strip())
+    # A note of more than one line reads as one run with \n in it in Object
+    # Info: hidden there (Edit Revision... has the note box)
+    hidden = set()
+    if has_parts:
+        hidden.add('Date')
+    if '\r' in decode_note(vs.GetRField(h, rec, 'Note')):
+        hidden.add('Note')
     for _hid, _heading, params in _widget_ids():
         for wid, name in params:
+            vs.vsoWidgetSetVisible(wid, name not in hidden)
             vs.vsoWidgetSetEnable(wid, name not in READ_ONLY)
     vs.vsoSetEventResult(kObjectEventHandled)
 
@@ -2537,6 +2749,7 @@ PREF_DEFAULTS = {
     'ShowLeader': True, 'Shoulder': 3.0, 'LeaderSetback': 0.0,
     'ShowDate': True, 'ShowNote': True, 'NoteWidth': 0.0,
     'ClassTemplate': 'Revision-{Rev}', 'ShowLatest': float(SHOW_LATEST), 'TextLine': 'Date', 'NoteAlign': 'Auto', 'TBBy': '', 'Style': '', 'Rev': 'A',
+    'DateFormat': DATE_FORMATS[0], 'FontName': '', 'FontSize': 0.0,
 }
 
 
@@ -2615,8 +2828,12 @@ def apply_prefs(obj, rec=OBJECT_NAME):
     the Revision dialog). Fields its style controls are left to the style."""
     prefs = load_prefs()
     for field in SETTINGS_FIELDS:
-        if not by_style(obj, field):
-            vs.SetRField(obj, rec, field, safe_text(_pref_text(prefs.get(field, ''))))
+        # one at a time: a parameter missing from the .vso skips only itself
+        try:
+            if not by_style(obj, field):
+                vs.SetRField(obj, rec, field, safe_text(_pref_text(prefs.get(field, ''))))
+        except Exception as e:
+            _log('preset', field, repr(e))
 
 
 def shape_points(mode, a, b):

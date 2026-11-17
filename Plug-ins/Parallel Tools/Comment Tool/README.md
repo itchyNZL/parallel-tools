@@ -65,7 +65,9 @@ Settings a comment rarely changes. A setting the comment's style controls is gre
 | Tag | Show | Number, Date, From, To. |
 | Tag | Closed header only | A Closed comment shows only its header line. |
 | Tag | Tag line | Under the full width of the tag, or under the header only. |
+| Tag | Font, Text size (pt) | The font (by name) and size of the tag's text. Blank and 0 leave Text > Format Text. |
 | Numbering | Prefix | Text before the number (default #). |
+| Numbering | New get | The number a new comment takes: the next number (highest + 1) or the lowest free (fills the gaps left by deleted comments). |
 | Numbering | Copies get | The number a copied comment takes: the next number, the next free after the copied one, or the lowest free. |
 | Class | Template | The class the comment goes in. `{Audience}`, `{Status}` and `{Type}` are replaced, so `Notes-Comment-{Type}` colours by type instead. Blank uses the object's own class. A live preview shows the result. |
 | Leader markers | Start, End (tag) | Markers from the Vectorworks marker picker. A start marker replaces the pin dot. |
@@ -76,7 +78,7 @@ Settings a comment rarely changes. A setting the comment's style controls is gre
 - **Tag end:** sets the tag width. Drag it past the tag to flip the tag to the other side.
 - **Pin** (Pin mode): moves the point; the tag stays put.
 
-**Font and size:** select comments and use Text > Format Text (Ctrl+Shift+T), as for any text.
+**Font and size:** set them in Settings (or a style, or Default Settings) to give comments the same text: a Client style can be larger than an Internal one. Left blank and 0, select comments and use Text > Format Text (Ctrl+Shift+T), as for any text. A font or size set in Settings wins over Format Text.
 
 ## Classes
 
@@ -103,7 +105,7 @@ With Audience not used, every class is lined as Internal. After a class is made 
 
 ## Styles
 
-Comments support plug-in styles. A style holds the shared settings: Outline, Cloud, Setback, Shoulder, what the tag shows, the class template, Use Type and Use Audience, the number prefix, Copies and Closed header only. Each comment keeps its own text, Status, Type, Audience, people, dates, number and tag position. Change the split in Edit Style (for example a "Client Markup" style with Audience set by the style to Client). A setting the style controls is left out of the Comment dialog and greyed in Object Info and Settings.
+Comments support plug-in styles. A style holds the shared settings: Outline, Cloud, Setback, Shoulder, what the tag shows, the class template, Use Type and Use Audience, the number prefix, New get, Copies, Closed header only, and Font and Text size. Each comment keeps its own text, Status, Type, Audience, people, dates, number and tag position. Change the split in Edit Style (for example a "Client Markup" style with Audience set by the style to Client). A setting the style controls is left out of the Comment dialog and greyed in Object Info and Settings.
 
 ## Comment list worksheet
 

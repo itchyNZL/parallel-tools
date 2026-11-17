@@ -7,9 +7,9 @@ By Ian Thrush / Parallel Architecture NZ. MIT licence, see [LICENSE.md](LICENSE.
 ## What it does
 
 - **One object per ground point.** Its height is measured up from its own Z, so set Z to the ground level there.
-- **Planes join up automatically.** Points on the same Side link in number order, and a new point links up as soon as it is placed.
+- **Planes join up automatically.** Points on the same Elevation (North, East ...) link in number order, and a new point links up as soon as it is placed.
 - **Three profiles:** Standard (height at boundary, then an angle), the Auckland Unitary Plan Alternative, or your own.
-- **Classes per side and per profile,** so a side, or one profile's planes, can be turned off on its own.
+- **Classes per elevation and per profile,** so an elevation, or one profile's planes, can be turned off on its own.
 
 ## Placing points
 
@@ -18,7 +18,7 @@ Use the **HTB** tool. Click the point on the boundary, then a second point along
 | Tool bar | What it does |
 |---|---|
 | **Style** | The HTB style (a profile preset) for new points, or `<Unstyled>`. |
-| **Side** | North to North West. Pick it before placing; the point takes the next number on that Side. |
+| **Elevation** | North to North West. Pick it before placing; the point takes the next number on that Elevation. |
 | **Spanner** | Default Settings for new points: Profile, Height at Boundary, Allowable Height, Daylight Angle and Dashed. Blank or `(as the plug-in)` keeps the plug-in's own default, and a chosen style's values still win. Remembered for each user. |
 
 Then set each point's Z to the ground level there.
@@ -31,13 +31,13 @@ Object Info shows only the settings the Profile uses.
 
 | Setting | What it does |
 |---|---|
-| Side | Points with the same Side join up. |
-| Point No | The order along the Side: North 2 draws its plane back to North 1, North 3 back to North 2. The lowest number on a Side has no plane. Gaps are fine. 0 takes the next free number. |
+| Elevation | Points on the same Elevation join up. |
+| Point No | The order along the Elevation: North 2 draws its plane back to North 1, North 3 back to North 2. The lowest number on an Elevation has no plane. Gaps are fine. 0 takes the next free number. |
 | Description | Notes only. |
 
-**Numbering is automatic.** A new point takes the next free number on its Side. A copy or paste keeps the old number and is renumbered the next time it redraws. Type a free number to set the order yourself, or 0 to renumber.
+**Numbering is automatic.** A new point takes the next free number on its Elevation. A copy or paste keeps the old number and is renumbered the next time it redraws. Type a free number to set the order yourself, or 0 to renumber.
 
-A small label beside each point says what it links to: `North 3 > 2`, `North 1 (start)`, `North 1 (unlinked)` (alone on its Side), or `(profiles differ)`. The labels are in the class `Site-HTB-Guides`: tick **Non Plot** in that class so they show on screen only.
+A small label beside each point says what it links to: `North 3 > 2`, `North 1 (start)`, `North 1 (unlinked)` (alone on its Elevation), or `(profiles differ)`. The labels are in the class `Site-HTB-Guides`: tick **Non Plot** in that class so they show on screen only.
 
 ### Profile
 
@@ -74,19 +74,19 @@ The tool's version, its GitHub page, and Check for updates....
 
 ## Classes and lines
 
-- **Points** go in `Site-HTB-<Side>` (for example `Site-HTB-North East`), made if the file hasn't got it, so a side can be turned off on its own. The marker and profile lines take their colour, weight and line type from that class.
+- **Points** go in `Site-HTB-<Elevation>` (for example `Site-HTB-North East`), made if the file hasn't got it, so an elevation can be turned off on its own. The marker and profile lines take their colour, weight and line type from that class.
 - **Planes** take their line, fill, colour and opacity from the Plane Class. A plane is drawn by the higher-numbered point of its pair, and is in that point's class.
 
 ## When to refresh
 
-Changing a point redraws the rest of its Side (and its old Side, if you changed it). Two cases need a refresh:
+Changing a point redraws the rest of its Elevation (and its old Elevation, if you changed it). Two cases need a refresh:
 
-- **After deleting a point:** Vectorworks runs nothing on a delete, so change any point on that Side or press **Refresh All**.
+- **After deleting a point:** Vectorworks runs nothing on a delete, so change any point on that Elevation or press **Refresh All**.
 - **After moving a point:** unless Reset on Move is ticked (Options > Execution Options), press **Refresh Selected** or **Refresh All**.
 
 ## Styles
 
-HTB points support plug-in styles. A style is a profile preset: Profile, the heights and angles, Shelf and Dashed. Side, Point No and Plane Class stay with each point.
+HTB points support plug-in styles. A style is a profile preset: Profile, the heights and angles, Shelf and Dashed. Elevation, Point No and Plane Class stay with each point.
 
 ## Limits
 
