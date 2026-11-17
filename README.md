@@ -32,7 +32,7 @@ Every tool comes as a pair: a drawing tool (`.vst`) that places the object, and 
 | **Revision** | Revision Tool | Ellipse, Rectangle, Polygon and Freehand modes; Style; spanner |
 | **BreakLine** | Break Line Tool | Style; spanner |
 | **Planting** | Planting Tool | Line, Closed shape, Rectangle and Freehand modes; Style; spanner |
-| **HTB** | HTB Tool | Style; Side; spanner |
+| **HTB** | HTB Tool | Style; Elevation; spanner |
 | **Truss** | Truss Tool | Style; Type; spanner |
 
 The spanner sets the default settings for new objects.
